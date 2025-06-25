@@ -1,0 +1,77 @@
+pipeline {
+agent {
+    docker {
+        image 'node:18'
+        args '-v /root/.npm:/root/.npm' // optional: cache npm
+    }
+}
+  environment {
+        // Define the Node version if using NodeJS plugin
+        NODE_ENV = 'production'
+    }
+
+    tools {
+        // Requires NodeJS plugin installed and configured in Jenkins
+        nodejs 'NodeJS_18'  // Name must match what you configured in Jenkins global tools
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Jeevan13467/Angular-application-.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Lint') {
+            steps {
+                sh 'npm run lint' // or `ng lint`
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'npm run test -- --watch=false --browsers=ChromeHeadless'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'npm run build -- --configuration production'
+            }
+        }
+
+        // Optional: Archive built app for download
+        stage('Archive Build') {
+            steps {
+                archiveArtifacts artifacts: 'dist/**', fingerprint: true
+            }
+        }
+
+        // Optional: Deploy step (e.g., to S3, FTP, or a server)
+        // stage('Deploy') {
+        //     steps {
+        //         sh 'scp -r dist/angular-app:/var/www/html'
+        //     }
+        // }
+
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished.'
+        }
+        success {
+            echo 'Build succeeded!'
+        }
+        failure {
+            echo 'Build failed!'
+        }
+    }
+}
