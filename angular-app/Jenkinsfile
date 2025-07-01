@@ -2,20 +2,14 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'NodeJS'
+        nodejs 'NodeJS 18'
     }
 
     environment {
-        APP_NAME = 'my-app'
+        DOCKER_IMAGE = 'jeevan779/demoapp5' // your DockerHub repo
     }
 
     stages {
-        stage('Checkout Code') {
-            steps {
-                git 'https://github.com/Jeevan13467/Angular-application-.git'
-            }
-        }
-
         stage('Install Dependencies') {
             steps {
                 sh 'npm install'
@@ -24,24 +18,33 @@ pipeline {
 
         stage('Build Angular App') {
             steps {
-                sh 'ng build --configuration production'
+                sh 'npm run build'
             }
         }
 
-        stage('Replace Files in Pod') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    // Get the pod name dynamically
-                    def POD_NAME = sh(
-                        script: "kubectl get pod -l app=$Angular-application- -o jsonpath='{.items[0].metadata.name}'",
-                        returnStdout: true
-                    ).trim()
+                    sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ."
+                }
+            }
+        }
 
-                    echo "Found pod: ${POD_NAME}"
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    // This assumes docker is already logged in to Docker Hub
+                    sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                }
+            }
+        }
 
-                    // Copy build files to pod (assumes nginx is serving /usr/share/nginx/html)
-                    sh "kubectl exec ${POD_NAME} -- rm -rf /usr/share/nginx/html/*"
-                    sh "kubectl cp dist/angular-app/. ${POD_NAME}:/usr/share/nginx/html/"
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    // Optional: dynamically update the image tag in the YAML
+                    sh "sed -i 's|image: .*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|' k8s-deployment.yaml"
+                    sh "kubectl apply -f k8s-deployment.yaml"
                 }
             }
         }
@@ -49,10 +52,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ App rebuilt and deployed!'
+            echo 'Deployment successful!'
         }
         failure {
-            echo '❌ Deployment failed.'
+            echo 'Something went wrong.'
         }
     }
 }
