@@ -1,46 +1,58 @@
 pipeline {
-  agent any
+    agent any
 
-  tools {
-    nodejs 'nodejs' // Define a Node.js tool named "nodejs" in Jenkins -> Global Tools
-  }
-
-  environment {
-    APP_NAME = "angular-app"
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        git branch: 'main', url: 'https://github.com/Jeevan13467/Angular-application-.git'
-      }
+    tools {
+        nodejs 'NodeJS 18'
     }
 
-    stage('Install Dependencies') {
-      steps {
-        sh 'npm install'
-      }
+    environment {
+        APP_NAME = 'my-app'
     }
 
-    stage('Build Angular App') {
-      steps {
-        sh 'npm run build -- --configuration production'
-      }
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git 'https://github.com/Jeevan13467/Angular-application-.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Build Angular App') {
+            steps {
+                sh 'ng build --configuration production'
+            }
+        }
+
+        stage('Replace Files in Pod') {
+            steps {
+                script {
+                    // Get the pod name dynamically
+                    def POD_NAME = sh(
+                        script: "kubectl get pod -l app=$Angular-application- -o jsonpath='{.items[0].metadata.name}'",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Found pod: ${POD_NAME}"
+
+                    // Copy build files to pod (assumes nginx is serving /usr/share/nginx/html)
+                    sh "kubectl exec ${POD_NAME} -- rm -rf /usr/share/nginx/html/*"
+                    sh "kubectl cp dist/angular-app/. ${POD_NAME}:/usr/share/nginx/html/"
+                }
+            }
+        }
     }
 
-    stage('Archive Build') {
-      steps {
-        archiveArtifacts artifacts: 'dist/**', fingerprint: true
-      }
+    post {
+        success {
+            echo '✅ App rebuilt and deployed!'
+        }
+        failure {
+            echo '❌ Deployment failed.'
+        }
     }
-  }
-
-  post {
-    success {
-      echo '✅ Angular build completed successfully!'
-    }
-    failure {
-      echo '❌ Build failed!'
-    }
-  }
 }
